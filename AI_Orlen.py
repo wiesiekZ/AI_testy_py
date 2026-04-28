@@ -4,12 +4,15 @@ import yfinance as yf
 from crewai import Agent, Task, Crew, Process
 from langchain_community.tools import DuckDuckGoSearchRun
 from crewai.tools import tool  # Importujemy dekorator tool
+from dotenv import load_dotenv
+
+# Wczytuje dane z pliku .env do środowiska Pythona
+load_dotenv()
 
 # Zamiast OpenAI, używamy Groq (który jest kompatybilny z biblioteką OpenAI)
-os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
-os.environ["OPENAI_MODEL_NAME"] = "llama-3.3-70b-versatile"
-os.environ["OPENAI_API_KEY"] = ""
-
+os.environ["OPENAI_API_BASE"] = os.getenv("OPENAI_API_BASE")
+os.environ["OPENAI_MODEL_NAME"] = os.getenv("OPENAI_MODEL_NAME")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 from datetime import datetime
 
