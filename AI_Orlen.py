@@ -1,66 +1,72 @@
 import os
 import yfinance as ticker_data
 from crewai import Agent, Task, Crew, Process
+from langchain_community.tools import DuckDuckGoSearchRun
+from crewai.tools import tool  # Importujemy dekorator tool
 
 # Zamiast OpenAI, używamy Groq (który jest kompatybilny z biblioteką OpenAI)
 os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
 os.environ["OPENAI_MODEL_NAME"] = "llama-3.3-70b-versatile"
 os.environ["OPENAI_API_KEY"] = ""
 
-def get_orlen_price(ticker="PKN.WA"):
-    """Funkcja pomocnicza do pobierania aktualnych danych z GPW"""
-    stock = ticker_data.Ticker(ticker)
-    info = stock.info
-    hist = stock.history(period="2d")
-    
-    current_price = info.get('regularMarketPrice') or hist['Close'].iloc[-1]
-    prev_close = hist['Close'].iloc[0]
-    change = ((current_price - prev_close) / prev_close) * 100
-    
-    return {
-        "price": round(current_price, 2),
-        "change_pct": round(change, 2),
-        "volume": info.get('regularMarketVolume', 'N/A')
-    }
 
-# Pobieramy dane przed uruchomieniem agenta, aby miał świeży kontekst
-orlen_stats = get_orlen_price()
+# 1. Definiujemy narzędzie w sposób, który Pydantic zaakceptuje
+@tool("search_tool")
+def search_tool(question: str):
+    """Przeszukuje internet w poszukiwaniu informacji na podany temat."""
+    return DuckDuckGoSearchRun().run(question)
 
-# 1. Definicja Agenta
-analyst = Agent(
-    role='Starszy Analityk GPW',
-    goal=f'Monitorowanie spółki Orlen i raportowanie istotnych zmian kursu.',
-    backstory="""Specjalizujesz się w polskim sektorze energetycznym. 
-    Potrafisz odróżnić zwykły szum rynkowy od ważnych sygnałów technicznych.""",
-    allow_delegation=False,
-    verbose=True
+# 2. Definicja Agentów (zmieniamy sposób przypisania narzędzia)
+data_analyst = Agent(
+    role='Analityk Techniczny GPW',
+    goal='Analiza kursu Orlenu na podstawie danych liczbowych.',
+    backstory='Jesteś ekspertem od liczb i wykresów.',
+    verbose=True,
+    allow_delegation=False # Wyłączamy delegację, by uniknąć zapętleń
 )
 
-# 2. Definicja Zadania
-monitoring_task = Task(
-    description=f"""Przeanalizuj bieżące dane dla Orlen (PKN.WA):
-    - Aktualna cena: {orlen_stats['price']} PLN
-    - Zmiana dzienna: {orlen_stats['change_pct']}%
-    - Wolumen: {orlen_stats['volume']}
-    
-    Jeśli zmiana przekracza 1.5%, zidentyfikuj to jako zdarzenie 'Wysokiej Priorytetowości'. 
-    Przygotuj raport dla inwestora, biorąc pod uwagę kontekst cenowy.""",
-    agent=analyst,
-    expected_output="Krótki, konkretny raport (max 3 punkty) z rekomendacją działania."
+news_researcher = Agent(
+    role='Dziennikarz Śledczy Biznesu',
+    goal='Znalezienie najnowszych wiadomości o spółce Orlen.',
+    backstory='Jesteś najlepszym researcherem w kraju.',
+    tools=[search_tool], # Teraz używamy naszej funkcji z dekoratorem
+    verbose=True,
+    allow_delegation=False
 )
 
-# 3. Formowanie Zespołu (Crew)
+
+from datetime import datetime
+
+# Pobieramy aktualną datę systemową
+today = datetime.now().strftime("%Y-%m-%d")
+
+# 3. Definicja Zadań
+task1 = Task(
+    description=f"Dziś jest {today}. Pobierz AKTUALNE notowania dla Orlen (PKN.WA) z dzisiejszej sesji. Zignoruj dane historyczne z lat 2024-2025. Interesuje mnie tylko cena z ostatnich 24 godzin.",
+    expected_output="Raport o cenie Orlenu z dzisiejszego dnia.",
+    agent=data_analyst
+)
+
+task2 = Task(
+    description='Wyszukaj w internecie wiadomości z ostatnich 24h dotyczące spółki Orlen (PKN.WA) lub polskiego sektora paliwowego.',
+    expected_output='Podsumowanie 3 najważniejszych newsów wraz z oceną sentymentu (pozytywny/negatywny/neutralny).',
+    agent=news_researcher
+)
+
+task3 = Task(
+    description='Na podstawie danych liczbowych i newsów, napisz finałowy raport: "Dlaczego kurs się zmienia i co może wydarzyć się jutro?".',
+    expected_output='Kompleksowy raport końcowy dla inwestora.',
+    agent=data_analyst # Główny analityk składa wszystko w całość
+)
+
+# 4. Uruchomienie Procesu (Sekwencyjnego - jeden agent czeka na drugiego)
 orlen_crew = Crew(
-    agents=[analyst],
-    tasks=[monitoring_task],
+    agents=[data_analyst, news_researcher],
+    tasks=[task1, task2, task3],
     process=Process.sequential
 )
 
-# 4. Start
-print(f"--- Uruchamianie monitoringu dla Orlen ---")
+print("--- Uruchamiam zaawansowaną analizę Orlenu ---")
 result = orlen_crew.kickoff()
-
 print("\n\n########################")
-print("## RAPORT AGENTA AI ##")
-print("########################\n")
 print(result)
