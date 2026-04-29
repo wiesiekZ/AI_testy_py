@@ -1,0 +1,865 @@
+Gemini
+Tworzenie Agenta AI do Monitorowania Giełdy
+Rozmowa z Gemini
+jak stworzyć agenta AI który będzie mi na bieżąco sprawdzał notowania giełdowe wybranych spółek?
+
+Stworzenie agenta AI do monitorowania giełdy w 2026 roku jest znacznie prostsze niż jeszcze kilka lat temu, dzięki rozwojowi frameworków "agentowych" i protokołów takich jak MCP (Model Context Protocol).
+
+Oto konkretny plan budowy takiego narzędzia, od prostych rozwiązań po zaawansowane systemy autonomiczne.
+
+1. Wybór "Mózgu" i Narzędzi
+Agent AI potrzebuje trzech elementów: modelu językowego (LLM), dostępu do danych (API) oraz frameworku, który połączy te klocki w działającą pętlę.
+
+LLM (Mózg): Najlepiej sprawdzą się modele z dobrą zdolnością rozumowania, takie jak GPT-4o, Claude 3.5 Sonnet lub lokalny Llama 3.
+
+Źródło danych (API): * Alpha Vantage: Standard w 2026 roku, oferuje świetne API dla agentów.
+
+Yahoo Finance (yfinance): Darmowa biblioteka Python, idealna na start.
+
+Polygon.io: Dla danych w czasie rzeczywistym (opcja płatna).
+
+Framework (Szkielet): * CrewAI lub LangGraph: Pozwalają tworzyć agentów, którzy potrafią planować zadania.
+
+PydanticAI: Nowoczesne podejście do budowy agentów z silnym typowaniem danych.
+
+2. Architektura Agenta
+Agent nie powinien tylko "czytać" ceny. Powinien działać w pętli:
+
+Fetcher (Zbieracz): Pobiera aktualne notowania i wskaźniki (np. RSI, średnie kroczące).
+
+Analyst (Analityk): Sprawdza wiadomości ze świata (newsy) i ocenia sentyment.
+
+Reporter (Informator): Wysyła Ci powiadomienie (np. na Telegram, Discord lub e-mail) tylko wtedy, gdy wydarzy się coś istotnego.
+
+3. Szybka implementacja (Python + CrewAI)
+Jeśli znasz podstawy Pythona, możesz użyć poniższego schematu, aby stworzyć agenta w kilka minut:
+
+Python
+from crewai import Agent, Task, Crew
+from langchain_community.tools import YahooFinanceNewsTool
+
+# 1. Definiujemy Agenta
+watcher = Agent(
+  role='Giełdowy Strażnik',
+  goal='Monitoruj kurs akcji Apple i informuj o nagłych spadkach powyżej 2%',
+  backstory='Jesteś doświadczonym analitykiem z okiem do detali.',
+  tools=[YahooFinanceNewsTool()],
+  verbose=True
+)
+
+# 2. Definiujemy Zadanie
+task = Task(
+  description='Sprawdź dzisiejszy kurs AAPL i znajdź przyczyny ewentualnych wahań.',
+  agent=watcher,
+  expected_output='Krótki raport z rekomendacją: Czekaj/Kupuj/Sprzedaj.'
+)
+
+# 3. Uruchamiamy
+crew = Crew(agents=[watcher], tasks=[task])
+result = crew.kickoff()
+4. Gdzie hostować takiego agenta?
+Aby agent działał "na bieżąco", nie może pracować tylko na Twoim laptopie.
+
+Replit: Najszybsza opcja – wrzucasz kod i uruchamiasz "Repl" w chmurze.
+
+GitHub Actions: Możesz ustawić darmowy skrypt (cron job), który uruchamia agenta co godzinę.
+
+Hugging Face Spaces: Pozwala na darmowe hostowanie prostych aplikacji AI.
+
+5. Na co uważać?
+Opóźnienia danych: Darmowe API (jak Yahoo Finance) mają często 15-minutowe opóźnienie. Do day-tradingu to za mało, do inwestowania długoterminowego – w sam raz.
+
+Koszty LLM: Jeśli agent będzie "myślał" co minutę przy użyciu GPT-4, rachunek za API może Cię zaskoczyć. Lepiej ustawić sprawdzanie co 15-30 minut.
+
+Halucynacje: AI może źle zinterpretować dane liczbowe. Zawsze używaj narzędzi (tzw. tools), które wykonują obliczenia matematyczne poza samym modelem językowym.
+
+Czy chciałbyś, abym pomógł Ci napisać pełny kod dla konkretnej spółki, czy wolisz najpierw skupić się na wyborze odpowiedniego źródła danych?
+
+Proszę o pełny kod dla spółki orlen
+
+Aby stworzyć agenta monitorującego spółkę Orlen (PKN.WA), najlepiej wykorzystać bibliotekę yfinance do pobierania twardych danych liczbowych oraz CrewAI do analizy logicznej.
+
+Poniższy kod to gotowy skrypt w Pythonie, który pobiera aktualną cenę, analizuje ją pod kątem Twoich wytycznych i generuje zwięzły raport.
+
+Wymagania wstępne
+Zanim uruchomisz kod, zainstaluj niezbędne biblioteki:
+
+Bash
+pip install crewai yfinance langchain_community
+Pełny kod Agenta "Orlen Guard"
+W kodzie wykorzystamy model GPT-4o (możesz go zmienić na inny, np. Claude lub lokalną Llamę przez Ollama).
+
+Python
+import os
+import yfinance as ticker_data
+from crewai import Agent, Task, Crew, Process
+
+# Konfiguracja klucza API (podstaw własny lub użyj zmiennych środowiskowych)
+os.environ["OPENAI_API_KEY"] = "TWOJ_KLUCZ_API"
+
+def get_orlen_price(ticker="PKN.WA"):
+    """Funkcja pomocnicza do pobierania aktualnych danych z GPW"""
+    stock = ticker_data.Ticker(ticker)
+    info = stock.info
+    hist = stock.history(period="2d")
+    
+    current_price = info.get('regularMarketPrice') or hist['Close'].iloc[-1]
+    prev_close = hist['Close'].iloc[0]
+    change = ((current_price - prev_close) / prev_close) * 100
+    
+    return {
+        "price": round(current_price, 2),
+        "change_pct": round(change, 2),
+        "volume": info.get('regularMarketVolume', 'N/A')
+    }
+
+# Pobieramy dane przed uruchomieniem agenta, aby miał świeży kontekst
+orlen_stats = get_orlen_price()
+
+# 1. Definicja Agenta
+analyst = Agent(
+    role='Starszy Analityk GPW',
+    goal=f'Monitorowanie spółki Orlen i raportowanie istotnych zmian kursu.',
+    backstory="""Specjalizujesz się w polskim sektorze energetycznym. 
+    Potrafisz odróżnić zwykły szum rynkowy od ważnych sygnałów technicznych.""",
+    allow_delegation=False,
+    verbose=True
+)
+
+# 2. Definicja Zadania
+monitoring_task = Task(
+    description=f"""Przeanalizuj bieżące dane dla Orlen (PKN.WA):
+    - Aktualna cena: {orlen_stats['price']} PLN
+    - Zmiana dzienna: {orlen_stats['change_pct']}%
+    - Wolumen: {orlen_stats['volume']}
+    
+    Jeśli zmiana przekracza 1.5%, zidentyfikuj to jako zdarzenie 'Wysokiej Priorytetowości'. 
+    Przygotuj raport dla inwestora, biorąc pod uwagę kontekst cenowy.""",
+    agent=analyst,
+    expected_output="Krótki, konkretny raport (max 3 punkty) z rekomendacją działania."
+)
+
+# 3. Formowanie Zespołu (Crew)
+orlen_crew = Crew(
+    agents=[analyst],
+    tasks=[monitoring_task],
+    process=Process.sequential
+)
+
+# 4. Start
+print(f"--- Uruchamianie monitoringu dla Orlen ---")
+result = orlen_crew.kickoff()
+
+print("\n\n########################")
+print("## RAPORT AGENTA AI ##")
+print("########################\n")
+print(result)
+Jak to działa w praktyce?
+Ticker PKN.WA: Używamy symbolu z Yahoo Finance, który odpowiada Orlenowi na Giełdzie Papierów Wartościowych w Warszawie.
+
+Funkcja get_orlen_price: Agent nie musi "zgadywać" ceny. Funkcja dostarcza mu precyzyjne dane liczbowe (cena zamknięcia, wolumen).
+
+Logika progowa: W zadaniu (Task) wpisaliśmy próg 1.5%. Agent dostosuje ton swojego raportu w zależności od tego, czy kurs jest stabilny, czy gwałtownie rośnie/spada.
+
+Jak zautomatyzować to "na bieżąco"?
+Aby skrypt sprawdzał notowania np. co godzinę bez Twojej ingerencji, najprościej użyć pętli while z opóźnieniem:
+
+Python
+import time
+
+while True:
+    print("Sprawdzam notowania...")
+    # Tutaj wywołaj orlen_crew.kickoff()
+    time.sleep(3600) # Czekaj 3600 sekund (1 godzina)
+Złota rada: Jeśli planujesz używać tego do realnych inwestycji, pamiętaj, że darmowe dane z Yahoo Finance mogą mieć 15 minut opóźnienia względem rzeczywistego arkusza zleceń na GPW.
+
+Czy chciałbyś, abyśmy do tego agenta dodali funkcję wysyłania powiadomień bezpośrednio na Twój telefon (np. przez Telegram)?
+
+jak zdobyć OPENAI_API_KEY
+
+Uzyskanie klucza API od OpenAI to proces, który zajmuje zwykle około 5 minut. Musisz jednak wiedzieć, że klucze te są płatne w systemie "pay-as-you-go" (płacisz tylko za to, co zużyje Twój agent).
+
+Oto instrukcja krok po kroku:
+
+1. Rejestracja w OpenAI Platform
+Wejdź na stronę platform.openai.com i zaloguj się na swoje konto ChatGPT (lub zarejestruj nowe). Pamiętaj, aby wejść na platformę dla deweloperów (Platform), a nie do zwykłego czatu.
+
+2. Wygenerowanie klucza
+W lewym panelu bocznym znajdź ikonę klucza lub zakładkę "API Keys".
+
+Kliknij przycisk "+ Create new secret key".
+
+Nadaj kluczowi nazwę (np. "Agent Orlen").
+
+Ważne: Po wyświetleniu klucza skopiuj go od razu i zapisz w bezpiecznym miejscu (np. w managerze haseł). Nigdy więcej go nie zobaczysz – jeśli go zgubisz, będziesz musiał wygenerować nowy.
+
+3. Doładowanie konta (Credits)
+W 2026 roku OpenAI nie daje już darmowych kredytów na start dla nowych kont. Aby klucz działał:
+
+Przejdź do zakładki Settings -> Billing.
+
+Kliknij "Add do credit balance".
+
+Wpłać minimalną kwotę (np. 5 USD). To wystarczy na tysiące zapytań Twojego agenta, jeśli optymalnie skonfigurujesz skrypt.
+
+Jak bezpiecznie użyć klucza w kodzie?
+Nigdy nie wpisuj klucza bezpośrednio w kodzie, który wrzucasz np. na GitHub. Najlepiej użyć pliku .env lub zmiennych środowiskowych systemu.
+
+Jeśli pracujesz lokalnie na Windows/Mac, możesz go ustawić tak:
+
+Windows (PowerShell):
+
+PowerShell
+$env:OPENAI_API_KEY="twój-klucz-tutaj"
+Linux / macOS:
+
+Bash
+export OPENAI_API_KEY="twój-klucz-tutaj"
+Na co uważać?
+Limity (Usage limits): W zakładce Billing ustaw sobie "Soft limit" (np. na 5$) i "Hard limit" (np. na 10$). Dzięki temu masz pewność, że jeśli w kodzie pojawi się błąd i agent wpadnie w nieskończoną pętlę, nie obciążysz karty na dużą kwotę.
+
+Bezpieczeństwo: Jeśli Twój klucz wycieknie do sieci, boty przejmą go w kilka sekund i wyczyszczą Ci saldo. Jeśli podejrzewasz wyciek, natychmiast usuń klucz w panelu OpenAI (Revoke key).
+
+Czy potrzebujesz pomocy z konfiguracją tego klucza w Twoim konkretnym środowisku (np. VS Code czy PyCharm)?
+
+Czy istnieją darmowe AI API
+
+Tak, w 2026 roku dostęp do darmowych API dla modeli AI jest bardzo szeroki. Wiele platform oferuje darmowe poziomy (Free Tiers), które idealnie nadają się do budowy agenta giełdowego, o którego pytałeś wcześniej.
+
+Oto najlepsze opcje, które pozwolą Ci uruchomić projekt bez wydawania ani grosza:
+
+1. Groq Cloud (Król Szybkości)
+Obecnie najchętniej wybierana opcja przez deweloperów budujących agentów. Groq oferuje niesamowitą prędkość generowania tekstu.
+
+Modele: Llama 3.3 70B, Llama 3.1 8B, Gemma 3, Mixtral.
+
+Darmowy limit: Bardzo hojny, mierzony w zapytaniach na minutę (RPM) i tokenach na dzień. Na przykład dla modelu Llama 3.1 8B możesz wysłać do 14 400 zapytań dziennie.
+
+Zaleta: Nie wymaga karty kredytowej na start.
+
+2. Google Gemini API (Najlepszy dla początkujących)
+Google oferuje jeden z najlepszych darmowych planów dla swoich najnowszych modeli.
+
+Modele: Gemini 2.5 Flash, Flash-Lite oraz najnowszy Gemini 3 Flash.
+
+Darmowy limit: Do 1500 zapytań dziennie (RPD) dla modeli Flash.
+
+Zaleta: Bardzo duże okno kontekstowe (możesz wrzucić agentowi ogromne raporty finansowe do analizy).
+
+3. OpenRouter (Wszystko w jednym)
+To agregator, który pozwala łączyć się z setkami modeli przez jedno API.
+
+Modele: Posiada specjalną sekcję "Free Models", gdzie znajdziesz modele od Meta, Mistral czy Qwen (np. openrouter/free).
+
+Zaleta: Jeśli jeden model przestanie działać, możesz łatwo przełączyć się na inny bez zmiany struktury kodu.
+
+4. Hugging Face Inference API (Dla zadań specjalnych)
+Jeśli potrzebujesz czegoś więcej niż tylko czatu (np. analiza sentymentu newsów giełdowych, klasyfikacja tekstu).
+
+Modele: Dostęp do tysięcy modeli open-source (BERT, RoBERTa, Whisper do audio).
+
+Zaleta: Idealne do lekkich, wyspecjalizowanych zadań analitycznych.
+
+Porównanie darmowych API (Stan na kwiecień 2026)
+Dostawca	Model	Limit (szacunkowy)	Najlepszy do...
+Groq	Llama 4 Scout / 3.3	1000-14k zapytań/dobę	Błyskawicznych reakcji agenta
+Google	Gemini 3 Flash	1500 zapytań/dobę	Analizy długich dokumentów
+OpenRouter	Różne (Free)	Zależy od dostawcy	Testowania wielu modeli na raz
+Hugging Face	Modele OS	Bez stałych limitów (Best effort)	Niszowych zadań (NLP)
+Jak to wykorzystać w Twoim agencie?
+W kodzie, który Ci podałem dla Orlenu, wystarczy zmienić adres bazowy (base URL) oraz model. Przykładowo, aby użyć darmowego Groq, zmień konfigurację na:
+
+Python
+# Zamiast OpenAI, używamy Groq (który jest kompatybilny z biblioteką OpenAI)
+os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
+os.environ["OPENAI_MODEL_NAME"] = "llama-3.3-70b-versatile"
+os.environ["OPENAI_API_KEY"] = "TWOJ_DARMOWY_KLUCZ_GROQ"
+Dzięki temu Twój "Giełdowy Strażnik" będzie działał całkowicie za darmo. Która z tych opcji brzmi dla Ciebie najlepiej?
+
+mam już plik z kodem py na lokalnym dysku wpisałem API_KEY jak to teraz uruchomić ?
+
+Skoro masz już plik .py z wklejonym kluczem, proces uruchomienia zależy od tego, czy masz zainstalowane środowisko Pythona. Oto najprostsza ścieżka, aby Twój agent "ożył":
+
+1. Sprawdź, czy masz Pythona
+Otwórz Terminal (macOS/Linux) lub Wiersz Polecenia / PowerShell (Windows) i wpisz:
+
+Bash
+python --version
+Jeśli zobaczysz np. Python 3.10.x lub nowszy – jest świetnie. Jeśli system nie rozpoznaje komendy, pobierz Pythona ze strony python.org.
+
+2. Zainstaluj niezbędne biblioteki (Paczki)
+Zanim uruchomisz kod, musisz doinstalować "narzędzia", których używa skrypt (tzw. zależności). W tym samym oknie terminala wpisz:
+
+Bash
+pip install crewai yfinance langchain_community
+Uwaga: Jeśli na Macu/Linux wyskoczy błąd, spróbuj użyć pip3 install....
+
+3. Przejdź do folderu z plikiem
+Musisz "wejść" terminalem do folderu, w którym zapisałeś plik (np. na Pulpicie).
+Użyj komendy cd (Change Directory):
+
+Bash
+cd Desktop  # Jeśli plik jest na pulpicie
+Możesz też po prostu wpisać cd  (ze spacją) i przeciągnąć folder z plikiem myszką prosto do okna terminala – ścieżka uzupełni się sama.
+
+4. Uruchom agenta!
+Teraz wpisz komendę uruchamiającą (zakładając, że plik nazywa się orlen.py):
+
+Bash
+python orlen.py
+Co się wydarzy po uruchomieniu?
+W terminalu powinieneś zobaczyć tzw. Verbose Output. Agent zacznie "myśleć" i wypisywać swoje kroki:
+
+"Entering new CrewAgentExecutor chain..." – to oznacza, że AI zaczyna analizę.
+
+Zobaczysz, jak pobiera dane o cenie Orlenu.
+
+Na końcu wyświetli się finalny raport z rekomendacją.
+
+Tip: Co jeśli wyskoczy błąd "ModuleNotFoundError"?
+To oznacza, że brakuje jakiejś biblioteki. Zobacz, jaka nazwa widnieje po słowie No module named '...' i zainstaluj ją przez pip install [nazwa_modułu].
+
+Czy udało się uruchomić skrypt, czy terminal wyrzucił jakiś konkretny błąd?
+
+jest OK działa
+
+Świetnie! Skoro agent "ożył" i przetworzył dane Orlenu, masz już działający fundament.
+
+Teraz, gdy widzisz, jak AI analizuje liczby w czasie rzeczywistym, warto pomyśleć o dopracowaniu go tak, by stał się Twoim osobistym asystentem inwestycyjnym. Oto co możesz zrobić dalej, żeby wycisnąć z niego więcej:
+
+1. Dodaj "Pamięć" i Notyfikacje
+Zamiast zaglądać do terminala, możesz dopisać kilka linii kodu, aby agent wysyłał Ci raporty na Telegram lub Discord tylko wtedy, gdy cena przekroczy określony próg (np. spadnie o 3%). To sprawi, że nie będziesz musiał pilnować skryptu.
+
+2. Multi-Agent (Rozszerzenie zespołu)
+W CrewAI możesz dodać drugiego agenta – Analityka Newsów.
+
+Agent 1 (Liczbowy): Sprawdza cenę i RSI.
+
+Agent 2 (Sentyment): Przeszukuje sieć pod kątem fraz "Orlen dywidenda", "Orlen fuzja" czy "ceny ropy".
+
+Dopiero po ich "rozmowie" otrzymujesz pełny raport.
+
+3. Monitoring Portfela
+Możesz zmodyfikować listę tickerów na: tickers = ["PKN.WA", "PKO.WA", "ALE.WA", "KGH.WA"], aby agent jednym uruchomieniem sprawdzał całą Twoją listę obserwowanych spółek (tzw. Watchlist).
+
+4. Pętla nieskończona
+Jeśli chcesz, by skrypt działał cały dzień (np. od 9:00 do 17:00 w godzinach sesji GPW), najprościej dodać na samym dole pliku:
+
+Python
+import time
+
+if __name__ == "__main__":
+    while True:
+        print("\n--- Rozpoczynam nową analizę ---")
+        orlen_crew.kickoff()
+        print("\n--- Analiza zakończona. Zasypiam na 30 minut ---")
+        time.sleep(1800)  # 1800 sekund = 30 minut
+Mała przestroga: Jeśli korzystasz z darmowego API (np. Groq lub Gemini), monitoruj limity zapytań, by nie zablokować sobie dostępu w połowie sesji giełdowej.
+
+Chciałbyś, żebyśmy teraz zmodyfikowali kod pod kątem monitorowania kilku spółek na raz, czy może interesuje Cię dodanie analizy newsów?
+
+analiza newsów
+
+Dodanie analizy newsów to "gamechanger". Dzięki temu agent nie tylko widzi, że cena Orlenu spada, ale potrafi wyjaśnić, czy to przez spadek cen ropy, nowe regulacje, czy wyniki kwartalne.
+
+W 2026 roku najskuteczniejszym sposobem jest dodanie do agenta narzędzia Serper (wyszukiwarka Google przez API) lub darmowego DuckDuckGoSearch.
+
+Oto jak zmodyfikować Twój kod, aby dodać drugiego agenta – "Detektywa Newsów".
+
+1. Instalacja narzędzi do wyszukiwania
+W terminalu wpisz:
+
+Bash
+pip install duckduckgo-search
+2. Zaktualizowany kod z dwoma agentami
+Teraz Twój "zespół" będzie składał się z Analityka Danych i Specjalisty od Sentymentu.
+
+Python
+import os
+import yfinance as ticker_data
+from crewai import Agent, Task, Crew, Process
+from langchain_community.tools import DuckDuckGoSearchRun
+
+# Ustawienia API (użyj swojego klucza)
+os.environ["OPENAI_API_KEY"] = "TWOJ_KLUCZ_API"
+
+# 1. Narzędzie wyszukiwania
+search_tool = DuckDuckGoSearchRun()
+
+# 2. Definicja Agentów
+data_analyst = Agent(
+    role='Analityk Techniczny GPW',
+    goal='Analiza kursu Orlenu na podstawie twardych danych liczbowych.',
+    backstory='Jesteś ekspertem od wykresów i wolumenu. Ignorujesz plotki, ufasz tylko liczbom.',
+    verbose=True
+)
+
+news_researcher = Agent(
+    role='Dziennikarz Śledczy Biznesu',
+    goal='Znalezienie najnowszych wiadomości o spółce Orlen i ocena ich wpływu na kurs.',
+    backstory='Przeszukujesz portale finansowe (Bankier, Money.pl, Bloomberg) w poszukiwaniu kluczowych informacji.',
+    tools=[search_tool],
+    verbose=True
+)
+
+# 3. Definicja Zadań
+task1 = Task(
+    description='Pobierz i przeanalizuj aktualną cenę Orlen (PKN.WA). Skup się na zmianie procentowej.',
+    expected_output='Raport o aktualnej kondycji cenowej spółki.',
+    agent=data_analyst
+)
+
+task2 = Task(
+    description='Wyszukaj w internecie wiadomości z ostatnich 24h dotyczące spółki Orlen (PKN.WA) lub polskiego sektora paliwowego.',
+    expected_output='Podsumowanie 3 najważniejszych newsów wraz z oceną sentymentu (pozytywny/negatywny/neutralny).',
+    agent=news_researcher
+)
+
+task3 = Task(
+    description='Na podstawie danych liczbowych i newsów, napisz finałowy raport: "Dlaczego kurs się zmienia i co może wydarzyć się jutro?".',
+    expected_output='Kompleksowy raport końcowy dla inwestora.',
+    agent=data_analyst # Główny analityk składa wszystko w całość
+)
+
+# 4. Uruchomienie Procesu (Sekwencyjnego - jeden agent czeka na drugiego)
+orlen_crew = Crew(
+    agents=[data_analyst, news_researcher],
+    tasks=[task1, task2, task3],
+    process=Process.sequential
+)
+
+print("--- Uruchamiam zaawansowaną analizę Orlenu ---")
+result = orlen_crew.kickoff()
+print("\n\n########################")
+print(result)
+Co się teraz zmieniło?
+Współpraca: Zamiast jednego agenta, masz teraz "burzę mózgów". news_researcher przeszukuje sieć przy pomocy DuckDuckGo, a data_analyst otrzymuje jego wnioski.
+
+Kontekst: Jeśli Orlen ogłosił dywidendę, agent newsowy to wyłapie, a agent techniczny powiąże to ze skokiem ceny na wykresie.
+
+Wiarygodność: Masz dwa źródła prawdy: twarde dane z giełdy i żywy język mediów.
+
+Mała podpowiedź:
+Darmowe narzędzie DuckDuckGoSearchRun jest świetne na start, ale czasem bywa "wybredne". Jeśli agent będzie miał problem ze znalezieniem polskich newsów, możesz w opisie zadania (description) dopisać: "Wyszukaj po polsku na portalach bankier.pl i money.pl".
+
+Czy raporty, które teraz generuje agent, są dla Ciebie wystarczająco szczegółowe, czy dodać mu jeszcze wskaźniki techniczne (np. RSI)?
+
+niestety mam błąd
+
+Błędy przy pierwszym uruchomieniu wielu agentów to norma – najczęściej wynikają one z drobnych różnic w wersjach bibliotek lub sposobie, w jaki agent próbuje użyć narzędzi.
+
+Abyśmy mogli to naprawić w minutę, skopiuj i wklej tutaj treść błędu (te czerwone linijki z terminala).
+
+Zanim to zrobisz, sprawdź te 3 najczęstsze przyczyny:
+
+1. Brak biblioteki duckduckgo-search
+Jeśli błąd mówi ModuleNotFoundError: No module named 'duckduckgo_search', upewnij się, że instalacja przeszła poprawnie:
+
+Bash
+pip install -U duckduckgo-search
+2. Problem z narzędziem (Tool) w CrewAI
+W nowszych wersjach CrewAI agenci bywają wybredni co do formatu narzędzi. Spróbuj zmienić definicję narzędzia w kodzie na taką:
+
+Python
+# Zamiast: tools=[search_tool]
+# Spróbuj tak:
+from langchain_community.tools import DuckDuckGoSearchRun
+search_tool = DuckDuckGoSearchRun()
+
+# I w definicji agenta:
+tools=[search_tool]
+3. Błąd "Rate Limit" (Limit zapytań)
+Jeśli w błędzie widzisz słowo RateLimitError lub 429, oznacza to, że:
+
+Twój klucz API OpenAI nie ma środków (musisz wpłacić min. 5$).
+
+Albo darmowe API (np. Groq) jest przeciążone.
+
+Wklej treść błędu poniżej – najprawdopodobniej wystarczy jedna drobna poprawka w kodzie, żeby wszystko ruszyło!_
+
+ File "/home/krzysztof/.local/lib/python3.10/site-packages/pydantic/main.py", line 253, in __init__
+
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Agent
+
+tools.0
+
+  Input should be a valid dictionary or instance of BaseTool [type=model_type, input_value=DuckDuckGoSearchRun(api_w...='auto', source='text')), input_type=DuckDuckGoSearchRun]
+
+    For further information visit https://errors.pydantic.dev/2.11/v/model_type
+
+Ten błąd wynika z tego, że nowsze wersje CrewAI wymagają, aby narzędzia (tools) były ściśle dopasowane do ich formatu, a standardowy DuckDuckGoSearchRun z biblioteki LangChain czasami "gryzie się" z walidacją Pydantic.
+
+Naprawimy to, używając wbudowanego dekoratora @tool, który przekształci funkcję wyszukiwania w format idealnie zrozumiały dla agenta.
+
+Rozwiązanie: Poprawiona sekcja narzędzi
+Zastąp górną część swojego kodu (importy i definicję narzędzia) poniższym fragmentem:
+
+Python
+import os
+import yfinance as ticker_data
+from crewai import Agent, Task, Crew, Process
+from langchain_community.tools import DuckDuckGoSearchRun
+from crewai.tools import tool  # Importujemy dekorator tool
+
+# 1. Definiujemy narzędzie w sposób, który Pydantic zaakceptuje
+@tool("search_tool")
+def search_tool(question: str):
+    """Przeszukuje internet w poszukiwaniu informacji na podany temat."""
+    return DuckDuckGoSearchRun().run(question)
+
+# 2. Definicja Agentów (zmieniamy sposób przypisania narzędzia)
+data_analyst = Agent(
+    role='Analityk Techniczny GPW',
+    goal='Analiza kursu Orlenu na podstawie danych liczbowych.',
+    backstory='Jesteś ekspertem od liczb i wykresów.',
+    verbose=True,
+    allow_delegation=False # Wyłączamy delegację, by uniknąć zapętleń
+)
+
+news_researcher = Agent(
+    role='Dziennikarz Śledczy Biznesu',
+    goal='Znalezienie najnowszych wiadomości o spółce Orlen.',
+    backstory='Jesteś najlepszym researcherem w kraju.',
+    tools=[search_tool], # Teraz używamy naszej funkcji z dekoratorem
+    verbose=True,
+    allow_delegation=False
+)
+Dlaczego to pomogło?
+Błąd ValidationError oznaczał, że CrewAI spodziewało się obiektu typu BaseTool, a otrzymało surową klasę z LangChain, która nie przeszła weryfikacji danych. Użycie @tool nad funkcją:
+
+Pakuje funkcję w kontener akceptowany przez Pydantic.
+
+Dodaje opis, dzięki któremu agent wie, kiedy i jak użyć wyszukiwarki.
+
+Co jeśli nadal masz błąd?
+Upewnij się, że Twoje wersje bibliotek są aktualne. Możesz je odświeżyć komendą:
+
+Bash
+pip install -U crewai langchain-community duckduckgo-search
+Spróbuj uruchomić skrypt teraz – po tej zmianie agent "Dziennikarz Śledczy" powinien bez problemu zacząć przeszukiwać internet. Czy teraz ruszyło?
+
+zadziałało ale tym razem skrypt podał stare dane za 2024 rok a mnie interesują dzisiejsze
+
+To częsty problem przy korzystaniu z agentów AI – modele językowe mają swoją "datę odcięcia" wiedzy (np. połowa 2024 lub 2025 roku) i jeśli nie wymusimy na nich sprawdzenia świeżych danych, będą operować na tym, co pamiętają z treningu.
+
+Aby agent podawał dane z dzisiaj (kwiecień 2026), musimy zrobić dwie rzeczy:
+
+Wymusić w opisie zadania szukanie informacji z konkretnym rokiem.
+
+Dodać do wyszukiwania parametr aktualnej daty, aby agent wiedział, co dla niego oznacza "dzisiaj".
+
+Oto jak zmodyfikować zadania (Tasks), aby agent przestał żyć przeszłością:
+
+Poprawione definicje Zadań
+Python
+from datetime import datetime
+
+# Pobieramy aktualną datę systemową
+today = datetime.now().strftime("%Y-%m-%d")
+
+task1 = Task(
+    description=f"""Dziś jest {today}. Pobierz AKTUALNE notowania dla Orlen (PKN.WA) z dzisiejszej sesji. 
+    Zignoruj dane historyczne z lat 2024-2025. Interesuje mnie tylko cena z ostatnich 24 godzin.""",
+    expected_output="Raport o cenie Orlenu z dzisiejszego dnia.",
+    agent=data_analyst
+)
+
+task2 = Task(
+    description=f"""Wyszukaj wiadomości o Orlen (PKN.WA) opublikowane DZIŚ LUB WCZORAJ ({today}).
+    Skup się na frazach: 'Orlen dzisiejsze notowania', 'Orlen wiadomości giełda 2026'.
+    Upewnij się, że newsy dotyczą bieżących wydarzeń, a nie raportów rocznych za 2024 rok.""",
+    expected_output="Zestawienie najświeższych newsów z ostatnich 24-48 godzin.",
+    agent=news_researcher
+)
+
+task3 = Task(
+    description=f"""Na podstawie zebranych danych z dnia {today}, przygotuj podsumowanie.
+    Jeśli nie znalazłeś newsów z dzisiaj, wyraźnie to zaznacz, zamiast cytować stare dane.""",
+    expected_output="Finalny raport inwestorski na dzień dzisiejszy.",
+    agent=data_analyst
+)
+Dlaczego to jest ważne?
+F-string z datą: Wpisanie {today} w opis zadania sprawia, że agent dostaje w każdym zapytaniu instrukcję: "Hej, mamy kwiecień 2026, nie patrz na 2024".
+
+Wymuszenie ignorowania: Wyraźne polecenie "Zignoruj dane historyczne" blokuje model przed sięganiem do jego wewnętrznej pamięci (tzw. parametrycznej), która jest już nieaktualna.
+
+Wyszukiwarka: Agent newsowy używając DuckDuckGo z dopiskiem "2026" w zapytaniu, dostanie wyniki przefiltrowane przez Google/DuckDuckGo, które promują świeże treści.
+
+Co jeśli dane giełdowe nadal są stare?
+Jeśli korzystasz z yfinance, biblioteka ta zawsze pobiera najświeższe dane z serwerów Yahoo. Jeśli widzisz stare ceny, sprawdź, czy w funkcji pobierającej cenę nie masz ustawionego parametru period na zbyt długi (np. period="2y"). Najlepiej ustawić:
+stock.history(period="1d") lub period="5d".
+
+Spróbuj teraz – agent powinien "zauważyć", że mamy rok 2026. Czy raporty stały się bardziej aktualne?
+
+nie teraz zmyślił swoje dane
+
+Klasyczny problem "halucynacji" AI. Kiedy agent nie może znaleźć konkretnych danych (lub narzędzie zwróci pusty wynik), modele językowe mają tendencję do "wypełniania luk", żeby tylko dostarczyć Ci odpowiedź. W finansach jest to niedopuszczalne.
+
+Aby to ukrócić, musimy zastosować technikę "Grounded Reasoning" (zakotwiczenia w faktach). Zmienimy kod tak, by agent był zmuszony do korzystania wyłącznie z twardych danych z yfinance i miał absolutny zakaz zmyślania.
+
+1. Naprawa funkcji pobierającej dane (Pewne źródło)
+Zamiast pozwolić agentowi "szukać" ceny w internecie (gdzie może trafić na stare śmieci), podajmy mu ją na tacy jako zmienną, której nie może zmienić.
+
+Python
+import yfinance as yf
+
+def get_real_orlen_data():
+    ticker = "PKN.WA"
+    stock = yf.Ticker(ticker)
+    # Pobieramy dane z ostatniego dnia sesyjnego
+    df = stock.history(period="1d")
+    
+    if df.empty:
+        return "Błąd: Nie udało się pobrać danych z giełdy."
+    
+    latest_price = df['Close'].iloc[-1]
+    prev_close = stock.info.get('previousClose', 'N/A')
+    
+    return f"""
+    DANE ZWERYFIKOWANE (Źródło: Yahoo Finance):
+    Spółka: ORLEN S.A.
+    Aktualna cena (zamknięcie): {latest_price:.2f} PLN
+    Poprzednie zamknięcie: {prev_close} PLN
+    Data odczytu: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    """
+
+# Wywołujemy funkcję przed agentem
+actual_market_data = get_real_orlen_data()
+2. "Krótka smycz" dla Agenta (System Prompt)
+Musisz zmienić instrukcje w Agent i Task, dodając tzw. klauzulę bezpieczeństwa.
+
+Python
+data_analyst = Agent(
+    role='Analityk Techniczny GPW',
+    goal='Raportowanie wyłącznie na podstawie dostarczonych danych liczbowych.',
+    backstory="""Jesteś surowym analitykiem. 
+    ZASADA 1: Jeśli nie masz danych liczbowych, napisz 'BRAK DANYCH'. 
+    ZASADA 2: Nigdy, pod żadnym pozorem nie zgaduj ani nie wymyślaj cen. 
+    ZASADA 3: Operuj tylko na danych oznaczonych jako 'DANE ZWERYFIKOWANE'.""",
+    verbose=True
+)
+
+task1 = Task(
+    description=f"""Używając poniższych danych:
+    {actual_market_data}
+    
+    Przedstaw krótki raport. Jeśli dane wskazują na rok inny niż 2026, 
+    poinformuj o błędzie źródła i nie kontynuuj analizy.""",
+    expected_output="Raport oparty wyłącznie na faktach liczbowych.",
+    agent=data_analyst
+)
+Dlaczego on zmyślał?
+Zbyt duża swoboda: Agent dostał narzędzie do wyszukiwania w sieci i zamiast wejść na konkretną stronę, zapytał "jaka jest cena Orlenu?". Dostał miks wyników z 2024 i 2022 roku, a model spróbował z tego "uśrednić" odpowiedź.
+
+Brak weryfikacji: Model językowy nie "wie", że kłamie. On po prostu generuje najbardziej prawdopodobny tekst.
+
+Co teraz zrobić?
+Wklej funkcję get_real_orlen_data() do swojego kodu.
+
+Przekaż wynik tej funkcji bezpośrednio do opisu zadania (description=f"...").
+
+W opisie Agenta dodaj: "Za zmyślanie danych zostaniesz wyłączony" – AI zaskakująco dobrze reaguje na takie bezpośrednie instrukcje ograniczające.
+
+Czy chcesz, żebym złożył to teraz w jeden, kompletny i "odporny na kłamstwa" plik gotowy do skopiowania?
+
+działa, teraz chciał bym wysłać ten raport na WhatsApp
+
+To świetny krok – agent staje się wtedy naprawdę użyteczny, bo "puka" do Ciebie z informacją.
+
+W 2026 roku najprostszym sposobem na wysłanie wiadomości na WhatsApp z poziomu Pythona (bez płacenia za skomplikowane API biznesowe) jest użycie biblioteki pywhatkit lub darmowego API CallMeBot.
+
+Polecam CallMeBot, ponieważ działa w tle i nie wymaga otwartej przeglądarki na komputerze.
+
+Krok 1: Uzyskaj klucz (API Key) do WhatsApp
+To darmowe i zajmuje 30 sekund:
+
+Dodaj do kontaktów numer: +34 644 20 66 13 (CallMeBot).
+
+Wyślij do niego wiadomość o treści: I allow callmebot to send me messages.
+
+Otrzymasz wiadomość z Twoim API Key.
+
+Krok 2: Kod wysyłający raport
+Musisz doinstalować bibliotekę requests, jeśli jej nie masz:
+
+Bash
+pip install requests
+Oto jak zmodyfikować końcówkę Twojego skryptu, aby po zakończeniu pracy agenta, raport wylądował na Twoim telefonie:
+
+Python
+import requests
+import urllib.parse
+
+def send_whatsapp_message(text):
+    # Twoje dane z CallMeBot
+    phone_number = "+48123456789"  # Wpisz swój numer z kierunkowym
+    api_key = "TWÓJ_API_KEY_Z_WHATSAPP"
+    
+    # Przygotowanie wiadomości (kodowanie znaków)
+    encoded_text = urllib.parse.quote(f"🤖 *Raport Agenta Orlen:*\n\n{text}")
+    url = f"https://api.callmebot.com/whatsapp.php?phone={phone_number}&text={encoded_text}&apikey={api_key}"
+    
+    response = requests.get(url)
+    if response.status_code == 200:
+        print("✅ Raport wysłany na WhatsApp!")
+    else:
+        print("❌ Błąd wysyłki:", response.text)
+
+# --- Tutaj kończy się Twój dotychczasowy kod CrewAI ---
+# Na samym końcu dodaj:
+
+if result:
+    # Wyciągamy tekst z wyniku pracy agenta
+    report_text = str(result)
+    send_whatsapp_message(report_text)
+Dlaczego to rozwiązanie jest najlepsze?
+Działa w chmurze: Jeśli kiedyś przeniesiesz swój skrypt na serwer, CallMeBot nadal będzie wysyłał wiadomości.
+
+Formatowanie: Możesz używać gwiazdek *tekst* w raporcie, aby pogrubić czcionkę w WhatsAppie.
+
+Brak kosztów: Jest to rozwiązanie darmowe do użytku osobistego.
+
+O czym warto pamiętać?
+Limity: CallMeBot ma limity (nie wysyłaj wiadomości co minutę, bo numer Cię zablokuje). Raz na godzinę jest zupełnie bezpieczne.
+
+Bezpieczeństwo: Pamiętaj, aby nie udostępniać nikomu swojego API Key do CallMeBot, bo każdy będzie mógł wysyłać Ci wiadomości.
+
+Czy udało Ci się odebrać testową wiadomość od bota na WhatsAppie?
+
+a co emailem
+
+Email to jeszcze bardziej stabilne rozwiązanie, ponieważ nie ma ryzyka blokady za "spamowanie" (jak w przypadku WhatsAppa) i pozwala na przesyłanie znacznie dłuższych, ładnie sformatowanych raportów.
+
+W Pythonie najprościej zrobić to przez protokół SMTP. Jeśli masz konto na Gmailu, Outlooku lub Onecie/WP, możesz wysłać raport w kilku liniach kodu.
+
+1. Przygotowanie konta (Przykład dla Gmail)
+Google wymaga teraz tzw. Hasła do aplikacji (zwykłe hasło do maila nie zadziała ze względów bezpieczeństwa):
+
+Wejdź na swoje konto Google -> Bezpieczeństwo.
+
+Włącz "Weryfikację dwuetapową".
+
+Wyszukaj opcję "Hasła do aplikacji".
+
+Wygeneruj hasło dla "Poczta" i nazwij je np. "Agent AI". Otrzymasz 16-znakowy kod.
+
+2. Kod wysyłający email
+Dodaj tę funkcję do swojego skryptu:
+
+Python
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def send_email_report(content):
+    # Konfiguracja
+    sender_email = "TWOJ_MAIL@gmail.com"
+    receiver_email = "ADRES_DOCELOWY@gmail.com"
+    app_password = "TWÓJ_KOD_APLIKACJI" # To 16-znakowe hasło od Google
+
+    # Tworzenie wiadomości
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = f"📊 Raport Giełdowy Orlen - {datetime.now().strftime('%d/%m/%Y')}"
+
+    # Treść maila
+    msg.attach(MIMEText(content, 'plain'))
+
+    try:
+        # Połączenie z serwerem Gmail (smtp.gmail.com, port 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls() # Szyfrowanie
+        server.login(sender_email, app_password)
+        server.send_message(msg)
+        server.quit()
+        print("✅ Email wysłany pomyślnie!")
+    except Exception as e:
+        print(f"❌ Błąd wysyłki maila: {e}")
+
+# Wywołanie na końcu skryptu:
+if result:
+    send_email_report(str(result))
+Porównanie: WhatsApp vs Email
+Cecha	WhatsApp (CallMeBot)	Email (SMTP)
+Szybkość odczytu	Błyskawiczna (powiadomienie push)	Zależna od synchronizacji
+Długość raportu	Krótkie komunikaty	Dowolnie długie analizy
+Niezawodność	Średnia (boty bywają offline)	Bardzo wysoka
+Formatowanie	Tylko pogrubienie/kursywa	Możliwość użycia tabel i HTML
+Pro-Tip: Wysyłaj oba jednocześnie!
+Możesz zmodyfikować końcówkę skryptu tak, aby wysyłał krótki alert na WhatsApp ("Hej, Orlen spadł o 2%, sprawdź maila!") oraz pełną analizę na Email.
+
+Python
+if result:
+    raport = str(result)
+    send_whatsapp_message("⚠️ Wygenerowano nowy raport dla Orlenu!")
+    send_email_report(raport)
+Czy chciałbyś, abyśmy spróbowali teraz ustawić ten skrypt tak, aby uruchamiał się samoczynnie o konkretnej godzinie (np. codziennie o 17:00 po zamknięciu giełdy)?
+
+dodałem plik .evn ale mam taki bład:raceback (most recent call last):
+
+  File "/home/krzysztof/poligon/AI/AI_Orlen.py", line 9, in <module>
+
+    os.environ["OPENAI_API_BASE"] = os.getenv("OPENAI_API_BASE")
+
+  File "/usr/lib/python3.10/os.py", line 685, in __setitem__
+
+    value = self.encodevalue(value)
+
+  File "/usr/lib/python3.10/os.py", line 757, in encode
+
+    raise TypeError("str expected, not %s" % type(value).__name__)
+
+TypeError: str expected, not NoneType
+
+Ten błąd wynika z tego, że Python nie widzi Twojego pliku .env lub nie potrafi go wczytać. W efekcie funkcja os.getenv zwraca None (nic), a system próbuje przypisać to "nic" do zmiennej środowiskowej, co kończy się błędem TypeError.
+
+Samo stworzenie pliku .env nie wystarczy – Python musi dostać instrukcję, żeby go odczytać.
+
+Jak to naprawić?
+1. Zainstaluj bibliotekę python-dotenv
+Otwórz terminal i wpisz:
+
+Bash
+pip install python-dotenv
+2. Popraw kod w pliku .py
+Musisz dodać import i funkcję load_dotenv() na samym początku skryptu:
+
+Python
+import os
+from dotenv import load_dotenv
+
+# Wczytuje dane z pliku .env do środowiska Pythona
+load_dotenv() 
+
+# Teraz przypisanie zadziała, o ile klucze są w pliku
+os.environ["OPENAI_API_BASE"] = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+3. Sprawdź format pliku .env
+Upewnij się, że Twój plik:
+
+Nazywa się dokładnie .env (kropka na początku, brak rozszerzenia .txt).
+
+Znajduje się w tym samym folderze co Twój skrypt AI_Orlen.py.
+
+Ma poprawny format (bez spacji wokół znaku =):
+
+Fragment kodu
+OPENAI_API_KEY=sk-xxxx...
+OPENAI_API_BASE=https://api.openai.com/v1
+Dlaczego to nie działało?
+Bez load_dotenv(), system szukał zmiennych w ustawieniach Twojego systemu operacyjnego (Linux/Ubuntu), a nie w pliku tekstowym obok skryptu. Gdy ich nie znalazł, funkcja zwróciła None, a Python "obraził się", bo spodziewał się tekstu (String).
+
+Mała uwaga: Jeśli używasz standardowego OpenAI, linijka z OPENAI_API_BASE jest opcjonalna. Najważniejszy jest OPENAI_API_KEY.
+
+Czy po dodaniu load_dotenv() skrypt ruszył?
+
+
+
+
+
+Gemini to AI i może popełniać błędy, także co do ludzi. Twoja prywatność i GeminiOtwiera się w nowym oknie
+
+

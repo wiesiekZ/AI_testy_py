@@ -17,7 +17,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 from datetime import datetime
 
 # Pobieramy aktualną datę systemową
-today = datetime.now().strftime("%Y-%m-%d")
+today = datetime.now().strftime("%Y-%m-%d %H:%M")
 
 def get_real_orlen_data():
     ticker = "PKN.WA"
@@ -30,12 +30,16 @@ def get_real_orlen_data():
     
     latest_price = df['Close'].iloc[-1]
     prev_close = stock.info.get('previousClose', 'N/A')
+    trailing_pe = stock.info.get('trailingPE')
+    forward_pe = stock.info.get('forwardPE')
     
     return f"""
     DANE ZWERYFIKOWANE (Źródło: Yahoo Finance):
     Spółka: ORLEN S.A.
     Aktualna cena (zamknięcie): {latest_price:.2f} PLN
     Poprzednie zamknięcie: {prev_close} PLN
+    Wskaźnik C/Z (Trailing P/E): {trailing_pe}
+    Wskaźnik C/Z (Forward P/E - prognozowany): {forward_pe}
     Data odczytu: {today}
     """
 
