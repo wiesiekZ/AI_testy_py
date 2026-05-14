@@ -1,5 +1,4 @@
 import os
-import yfinance as ticker_data
 import yfinance as yf
 from crewai import Agent, Task, Crew, Process
 from langchain_community.tools import DuckDuckGoSearchRun
